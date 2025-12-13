@@ -21,7 +21,7 @@ def tool(
     args_schema: ArgsSchema | None = None,
     infer_schema: bool = True,
     response_format: Literal["content", "content_and_artifact"] = "content",
-    parse_docstring: bool = False,
+    parse_docstring: bool = True,
     error_on_invalid_docstring: bool = True,
     extras: dict[str, Any] | None = None,
 ) -> Callable[[Callable | Runnable], BaseTool]: ...
@@ -37,7 +37,7 @@ def tool(
     args_schema: ArgsSchema | None = None,
     infer_schema: bool = True,
     response_format: Literal["content", "content_and_artifact"] = "content",
-    parse_docstring: bool = False,
+    parse_docstring: bool = True,
     error_on_invalid_docstring: bool = True,
     extras: dict[str, Any] | None = None,
 ) -> BaseTool: ...
@@ -52,7 +52,7 @@ def tool(
     args_schema: ArgsSchema | None = None,
     infer_schema: bool = True,
     response_format: Literal["content", "content_and_artifact"] = "content",
-    parse_docstring: bool = False,
+    parse_docstring: bool = True,
     error_on_invalid_docstring: bool = True,
     extras: dict[str, Any] | None = None,
 ) -> BaseTool: ...
@@ -67,7 +67,7 @@ def tool(
     args_schema: ArgsSchema | None = None,
     infer_schema: bool = True,
     response_format: Literal["content", "content_and_artifact"] = "content",
-    parse_docstring: bool = False,
+    parse_docstring: bool = True,
     error_on_invalid_docstring: bool = True,
     extras: dict[str, Any] | None = None,
 ) -> Callable[[Callable | Runnable], BaseTool]: ...
@@ -82,7 +82,7 @@ def tool(
     args_schema: ArgsSchema | None = None,
     infer_schema: bool = True,
     response_format: Literal["content", "content_and_artifact"] = "content",
-    parse_docstring: bool = False,
+    parse_docstring: bool = True,
     error_on_invalid_docstring: bool = True,
     extras: dict[str, Any] | None = None,
 ) -> BaseTool | Callable[[Callable | Runnable], BaseTool]:
@@ -133,6 +133,7 @@ def tool(
             corresponding to the `(content, artifact)` of a `ToolMessage`.
         parse_docstring: If `infer_schema` and `parse_docstring`, will attempt to
             parse parameter descriptions from Google Style function docstrings.
+            Defaults to `True` to enable better LLM function calling performance.
         error_on_invalid_docstring: If `parse_docstring` is provided, configure
             whether to raise `ValueError` on invalid Google Style docstrings.
         extras: Optional provider-specific extra fields for the tool.
@@ -180,10 +181,10 @@ def tool(
             return "partial json of results", {"full": "object of results"}
         ```
 
-        Parse Google-style docstrings:
+        Parse Google-style docstrings (enabled by default):
 
         ```python
-        @tool(parse_docstring=True)
+        @tool
         def foo(bar: str, baz: int) -> str:
             \"\"\"The foo.
 
@@ -217,10 +218,11 @@ def tool(
         }
         ```
 
-        Note that parsing by default will raise `ValueError` if the docstring
-        is considered invalid. A docstring is considered invalid if it contains
-        arguments not in the function signature, or is unable to be parsed into
-        a summary and `"Args:"` blocks. Examples below:
+        Note that docstring parsing is enabled by default and will raise `ValueError`
+        if the docstring is considered invalid (unless `error_on_invalid_docstring=False`).
+        A docstring is considered invalid if it contains arguments not in the function
+        signature, or is unable to be parsed into a summary and `"Args:"` blocks.
+        Examples below:
 
         ```python
         # No args section

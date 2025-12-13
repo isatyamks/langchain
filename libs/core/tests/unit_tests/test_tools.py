@@ -96,7 +96,7 @@ def _get_tool_call_json_schema(tool: BaseTool) -> dict:
 def test_unnamed_decorator() -> None:
     """Test functionality with unnamed decorator."""
 
-    @tool
+    @tool(parse_docstring=False)
     def search_api(query: str) -> str:
         """Search the API for the query."""
         return "API result"
@@ -234,7 +234,7 @@ def test_decorator_with_specified_schema_pydantic_v1() -> None:
 def test_decorated_function_schema_equivalent() -> None:
     """Test that a BaseTool without a schema meets expectations."""
 
-    @tool
+    @tool(parse_docstring=False)
     def structured_tool_input(
         *, arg1: int, arg2: bool, arg3: dict | None = None
     ) -> str:
@@ -341,7 +341,7 @@ def test_structured_tool_types_parsed() -> None:
     class SomeBaseModel(BaseModel):
         foo: str
 
-    @tool
+    @tool(parse_docstring=False)
     def structured_tool(
         some_enum: SomeEnum,
         some_base_model: SomeBaseModel,
@@ -378,7 +378,7 @@ def test_structured_tool_types_parsed_pydantic_v1() -> None:
     class AnotherBaseModel(BaseModelV1):
         bar: str
 
-    @tool
+    @tool(parse_docstring=False)
     def structured_tool(some_base_model: SomeBaseModel) -> AnotherBaseModel:
         """Return the arguments directly."""
         return AnotherBaseModel(bar=some_base_model.foo)
@@ -1094,13 +1094,13 @@ def assert_bar(bar: Any, bar_config: RunnableConfig) -> Any:
     return bar
 
 
-@tool
+@tool(parse_docstring=False)
 def foo(bar: Any, bar_config: RunnableConfig) -> Any:
     """The foo."""
     return assert_bar(bar, bar_config)
 
 
-@tool
+@tool(parse_docstring=False)
 async def afoo(bar: Any, bar_config: RunnableConfig) -> Any:
     """The foo."""
     return assert_bar(bar, bar_config)
@@ -1200,22 +1200,9 @@ def test_tool_arg_descriptions() -> None:
         """
         return bar
 
+    # Test parses docstring by default
     foo1 = tool(foo)
     args_schema = _schema(foo1.args_schema)
-    assert args_schema == {
-        "title": "foo",
-        "type": "object",
-        "description": inspect.getdoc(foo),
-        "properties": {
-            "bar": {"title": "Bar", "type": "string"},
-            "baz": {"title": "Baz", "type": "integer"},
-        },
-        "required": ["bar", "baz"],
-    }
-
-    # Test parses docstring
-    foo2 = tool(foo, parse_docstring=True)
-    args_schema = _schema(foo2.args_schema)
     expected = {
         "title": "foo",
         "description": "The foo.",
@@ -1227,6 +1214,25 @@ def test_tool_arg_descriptions() -> None:
         "required": ["bar", "baz"],
     }
     assert args_schema == expected
+
+    # Test explicit parse_docstring=True (should work the same)
+    foo2 = tool(foo, parse_docstring=True)
+    args_schema = _schema(foo2.args_schema)
+    assert args_schema == expected
+
+    # Test parse_docstring=False (old behavior)
+    foo3 = tool(foo, parse_docstring=False)
+    args_schema = _schema(foo3.args_schema)
+    assert args_schema == {
+        "title": "foo",
+        "type": "object",
+        "description": inspect.getdoc(foo),
+        "properties": {
+            "bar": {"title": "Bar", "type": "string"},
+            "baz": {"title": "Baz", "type": "integer"},
+        },
+        "required": ["bar", "baz"],
+    }
 
     # Test parsing with run_manager does not raise error
     def foo3(  # noqa: D417
@@ -1240,7 +1246,7 @@ def test_tool_arg_descriptions() -> None:
         """
         return bar
 
-    as_tool = tool(foo3, parse_docstring=True)
+    as_tool = tool(foo3)
     args_schema = _schema(as_tool.args_schema)
     assert args_schema["description"] == expected["description"]
     assert args_schema["properties"] == expected["properties"]
@@ -1251,7 +1257,7 @@ def test_tool_arg_descriptions() -> None:
         """The foo."""
         return "bar"
 
-    as_tool = tool(foo4, parse_docstring=True)
+    as_tool = tool(foo4)
     args_schema = _schema(as_tool.args_schema)
     assert args_schema["description"] == expected["description"]
 
@@ -1259,7 +1265,7 @@ def test_tool_arg_descriptions() -> None:
         """The foo."""
         return "bar"
 
-    as_tool = tool(foo5, parse_docstring=True)
+    as_tool = tool(foo5)
     args_schema = _schema(as_tool.args_schema)
     assert args_schema["description"] == expected["description"]
 
@@ -1360,6 +1366,12 @@ def test_tool_invalid_docstrings() -> None:
         """  # noqa: D205,D411  # We're intentionally testing bad formatting.
         return bar
 
+    # Test that invalid docstrings raise errors by default
+    for func in {foo3, foo4}:
+        with pytest.raises(ValueError, match="Found invalid Google-Style docstring"):
+            _ = tool(func)
+
+    # Test explicit parse_docstring=True still works
     for func in {foo3, foo4}:
         with pytest.raises(ValueError, match="Found invalid Google-Style docstring"):
             _ = tool(func, parse_docstring=True)
@@ -1373,6 +1385,13 @@ def test_tool_invalid_docstrings() -> None:
         """
         return bar
 
+    # Test that invalid args in docstring raise errors by default
+    with pytest.raises(
+        ValueError, match="Arg banana in docstring not found in function signature"
+    ):
+        _ = tool(foo5)
+
+    # Test explicit parse_docstring=True still works
     with pytest.raises(
         ValueError, match="Arg banana in docstring not found in function signature"
     ):
@@ -1390,7 +1409,8 @@ def test_tool_annotated_descriptions() -> None:
         """
         return bar
 
-    foo1 = tool(foo)
+    # Test that Annotated descriptions are used when parse_docstring=False
+    foo1 = tool(foo, parse_docstring=False)
     args_schema = _schema(foo1.args_schema)
     assert args_schema == {
         "title": "foo",
@@ -1466,7 +1486,7 @@ class _MockStructuredToolWithRawOutput(BaseTool):
         return f"{arg1} {arg2}", {"arg1": arg1, "arg2": arg2, "arg3": arg3}
 
 
-@tool("structured_api", response_format="content_and_artifact")
+@tool("structured_api", response_format="content_and_artifact", parse_docstring=False)
 def _mock_structured_tool_with_artifact(
     *, arg1: int, arg2: bool, arg3: dict | None = None
 ) -> tuple[str, dict]:
