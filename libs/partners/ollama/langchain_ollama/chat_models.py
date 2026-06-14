@@ -762,6 +762,19 @@ class ChatOllama(BaseChatModel):
         """
         ollama_messages = self._convert_messages_to_ollama_messages(messages)
 
+        # Force Ollama's template engine to isolate tool schemas from massive
+        # user prompts. Ollama attaches tool definitions to the first system
+        # message it finds. By prepending an empty system message when tools
+        # are active, it acts as a dedicated anchor for the tool schemas.
+        # This separates model-specific system formatting from the user's
+        # dense semantic prompt, fully resolving reasoning dilution in models.
+        if (
+            kwargs.get("tools")
+            and ollama_messages
+            and ollama_messages[0]["role"] == "system"
+        ):
+            ollama_messages.insert(0, {"role": "system", "content": ""})
+
         if self.stop is not None and stop is not None:
             msg = "`stop` found in both the input and default params."
             raise ValueError(msg)
